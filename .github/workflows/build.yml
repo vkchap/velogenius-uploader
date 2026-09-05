@@ -1,0 +1,35 @@
+# Builds the single-file Windows uploader and publishes it as the rolling
+# "latest" release, so Settings can link to one unchanging URL:
+#   https://github.com/vkchap/velogenius-uploader/releases/latest/download/VeloGenius-Uploader.exe
+name: Build uploader
+
+on:
+  push:
+    branches: [main]
+    paths: [velogenius_uploader.py, .github/workflows/build.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller
+      - run: pyinstaller --onefile --console --name VeloGenius-Uploader velogenius_uploader.py
+      - name: Smoke test
+        run: dist\VeloGenius-Uploader.exe --help
+      - name: Publish as the rolling "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release view latest >/dev/null 2>&1 || gh release create latest \
+            --title "VeloGenius Uploader" \
+            --notes "Current build of the uploader. Windows: download the .exe and double-click it. The first time, Windows shows 'Windows protected your PC': click More info, then Run anyway."
+          gh release upload latest dist/VeloGenius-Uploader.exe --clobber
