@@ -20,8 +20,8 @@ icon_size = 128
 text_size = 13
 label_pos = "bottom"
 # Matches the background art, which is drawn to the same coordinates.
-icon_locations = {appname: (165, 190), "Applications": (495, 190)}
-window_rect = ((240, 160), (660, 400))
+icon_locations = {appname: (165, 178), "Applications": (495, 178)}
+window_rect = ((240, 160), (660, 360))
 
 default_view = "icon-view"
 show_status_bar = False
