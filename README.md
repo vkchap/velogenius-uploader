@@ -15,9 +15,11 @@ go to **Settings**, and find the *Zwift uploader* section.
 
 - **Mac:** download
   [VeloGenius-Uploader.dmg](https://github.com/vkchap/velogenius-uploader/releases/latest/download/VeloGenius-Uploader.dmg),
-  open it, and double-click **VeloGenius Uploader**. It opens a Terminal
-  window to talk to you in. It is signed and notarized with Apple, so there is
-  no warning to click through.
+  open it, drag **VeloGenius Uploader** into the **Applications** folder shown
+  beside it, and open it from there. It opens a Terminal window to talk to you
+  in. It is signed and notarized with Apple, so there is no warning to click
+  through — but do drag it across rather than running it from the disk image,
+  which is read-only and leaves macOS unable to finish approving it.
 - **Windows:** download
   [VeloGenius-Uploader.exe](https://github.com/vkchap/velogenius-uploader/releases/latest/download/VeloGenius-Uploader.exe)
   and double-click it. The first time, Windows shows *"Windows protected your
