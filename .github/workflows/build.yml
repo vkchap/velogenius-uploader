@@ -92,14 +92,23 @@ jobs:
         run: |
           APP="dist/VeloGenius Uploader.app"
           ID="Developer ID Application: Van Chappell (386NH3KWBK)"
+          # Submit, wait, and on anything but Accepted print Apple's own
+          # findings: "Invalid" alone says nothing about which file or why.
+          notarize() {
+            out="$(xcrun notarytool submit "$1" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait 2>&1)"
+            echo "$out"
+            sid="$(echo "$out" | awk '/^  id:/ {print $2; exit}')"
+            if ! echo "$out" | grep -q "status: Accepted"; then
+              xcrun notarytool log "$sid" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+              exit 1
+            fi
+          }
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/app.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/app.zip" \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          notarize "$RUNNER_TEMP/app.zip"
           xcrun stapler staple "$APP"
           hdiutil create -volname "VeloGenius Uploader" -srcfolder "$APP" -ov -format UDZO dist/VeloGenius-Uploader.dmg
           codesign --force --timestamp --sign "$ID" dist/VeloGenius-Uploader.dmg
-          xcrun notarytool submit dist/VeloGenius-Uploader.dmg \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          notarize dist/VeloGenius-Uploader.dmg
           xcrun stapler staple dist/VeloGenius-Uploader.dmg
           spctl --assess --type open --context context:primary-signature -v dist/VeloGenius-Uploader.dmg
 
