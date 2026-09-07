@@ -116,7 +116,15 @@ jobs:
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/app.zip"
           notarize "$RUNNER_TEMP/app.zip"
           xcrun stapler staple "$APP"
-          hdiutil create -volname "VeloGenius Uploader" -srcfolder "$APP" -ov -format UDZO dist/VeloGenius-Uploader.dmg
+          # A staging folder with an Applications shortcut beside the app, so
+          # the disk image says "drag me over there". Running an app from the
+          # read-only image instead leaves macOS unable to clear its quarantine
+          # flag, which is what makes the inner program look untrusted.
+          STAGE="$RUNNER_TEMP/dmg"
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          ditto "$APP" "$STAGE/VeloGenius Uploader.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "VeloGenius Uploader" -srcfolder "$STAGE" -ov -format UDZO dist/VeloGenius-Uploader.dmg
           codesign --force --timestamp --sign "$ID" dist/VeloGenius-Uploader.dmg
           notarize dist/VeloGenius-Uploader.dmg
           xcrun stapler staple dist/VeloGenius-Uploader.dmg
