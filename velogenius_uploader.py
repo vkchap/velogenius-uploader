@@ -196,22 +196,25 @@ def find_zwift_folder() -> tuple[Path | None, list[str]]:
 # --- setup --------------------------------------------------------------------
 
 
-def run_setup() -> dict:
-    headline("VeloGenius Zwift Uploader — first-time setup")
-    say()
-    say("  This sends your Zwift ride files to VeloGenius so your training")
-    say("  history stays complete. It only ever reads .fit files, and only")
-    say("  from the folder you confirm below.")
+def choose_folder(besides: Path | None = None) -> Path:
+    """Which folder holds the rides. Offers the one we can find, then asks.
 
+    `besides` is a folder already in use: there is no point offering the
+    athlete the folder they are trying to move away from.
+    """
     folder, notes = find_zwift_folder()
+    if folder is not None and besides is not None and folder == besides:
+        folder, notes = None, []
+
     say()
-    if folder:
+    if folder is not None:
         n = len(fit_files(folder))
         say(f"  Found your Zwift folder: {folder}")
         say(f"  It contains {n} ride file{'s' if n != 1 else ''}.")
-        answer = ask("\n  Use this folder? [Y/n] ").strip().lower()
-        if answer in ("n", "no"):
+        if ask("\n  Use this folder? [Y/n] ").strip().lower() in ("n", "no"):
             folder = None
+    elif not notes:
+        pass  # nothing to report: we simply did not look, or found the old one
     else:
         say("  I could not find your Zwift folder automatically.")
         for note in notes:
@@ -238,6 +241,60 @@ def run_setup() -> dict:
         folder = cand
         n_found = len(fit_files(folder))
         say(f"  Using {folder} ({n_found} ride file{'s' if n_found != 1 else ''}).")
+    return folder
+
+
+def confirm_folder(cfg: dict) -> dict:
+    """Say which folder is about to be watched, and offer to change it.
+
+    Setup runs once and is then never seen again, so a folder chosen wrongly —
+    or a folder that later moves — used to be unreachable from the app: the
+    only way out was to find and delete the settings file. Asking here costs
+    one keypress and makes it recoverable.
+
+    Skipped when nothing can answer. A run with no keyboard (launched by a
+    script, or piped) must start watching rather than sit on a question, and
+    ask() would otherwise stop the whole thing.
+    """
+    watch = Path(cfg["watch_dir"])
+    ok, why = readable(watch)
+    say(f"  Watching: {watch}")
+    if not ok:
+        say(f"  Cannot read it — {why}.")
+    elif n := len(fit_files(watch)):
+        say(f"  {n} ride file{'s' if n != 1 else ''} in it.")
+    else:
+        # Worth saying plainly. An empty folder is the shape of a wrong
+        # folder, and this is the moment it can still be corrected.
+        say("  No ride files in it yet.")
+
+    if not sys.stdin.isatty():
+        return cfg
+
+    prompt = "\n  Press Return to start, or C to use a different folder: "
+    if ask(prompt).strip().lower() not in ("c", "change"):
+        return cfg
+
+    cfg = {**cfg, "watch_dir": str(choose_folder(besides=watch))}
+    save_config(cfg)
+    say(f"  Saved. From now on it watches {cfg['watch_dir']}.")
+    return cfg
+
+
+def save_config(cfg: dict) -> None:
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(json.dumps(cfg, indent=1))
+    CONFIG_PATH.chmod(0o600)
+
+
+def run_setup() -> dict:
+    headline("VeloGenius Zwift Uploader — first-time setup")
+    say()
+    say("  This sends your Zwift ride files to VeloGenius so your training")
+    say("  history stays complete. It only ever reads .fit files, and only")
+    say("  from the folder you confirm below.")
+
+    folder = choose_folder()
 
     say()
     say(f"  Now the setup code. Sign in at {SETTINGS_URL}")
@@ -265,9 +322,7 @@ def run_setup() -> dict:
         say(f"  Connected — hello {status['athlete']}.")
         break
 
-    APP_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(cfg, indent=1))
-    CONFIG_PATH.chmod(0o600)
+    save_config(cfg)
     say(f"  Saved to {CONFIG_PATH}")
     return cfg
 
@@ -335,6 +390,8 @@ def upload_new(cfg: dict, ledger: dict, *, verbose: bool) -> tuple[int, int]:
             say(
                 f"  Nothing new — all {len(files)} ride "
                 f"file{'s' if len(files) != 1 else ''} already uploaded."
+                if files
+                else "  Nothing to send yet."
             )
         return 0, too_recent
 
@@ -384,7 +441,13 @@ def main() -> int:
         args.once = True
 
     headline("VeloGenius Zwift Uploader")
-    say(f"  Watching: {cfg['watch_dir']}")
+    say()
+    if args.folder:
+        # An explicit one-off folder was named on the command line; there is
+        # nothing to confirm and nothing to remember.
+        say(f"  Watching: {cfg['watch_dir']}")
+    else:
+        cfg = confirm_folder(cfg)
     say()
 
     first = True

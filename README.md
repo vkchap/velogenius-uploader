@@ -29,6 +29,10 @@ go to **Settings**, and find the *Zwift uploader* section.
 rides are in it; you confirm, then paste your setup code. That's the whole
 setup — it remembers from then on.
 
+Every later run shows the folder it is about to watch and offers to change it,
+so a folder chosen wrongly, or one that later moves, is one keypress away from
+being fixed.
+
 The first run uploads everything it finds. After that it only sends new rides.
 
 ## While it runs
