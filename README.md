@@ -11,16 +11,17 @@ It reads `.fit` ride files from your Zwift folder and nothing else.
 **1. Get your setup code.** Sign in at [velogenius.ai](https://velogenius.ai),
 go to **Settings**, and find the *Zwift uploader* section.
 
-**2. Start the uploader.**
+**2. Start the uploader.** Nothing else to install.
 
+- **Mac:** download
+  [VeloGenius-Uploader.dmg](https://github.com/vkchap/velogenius-uploader/releases/latest/download/VeloGenius-Uploader.dmg),
+  open it, and double-click **VeloGenius Uploader**. It opens a Terminal
+  window to talk to you in. It is signed and notarized with Apple, so there is
+  no warning to click through.
 - **Windows:** download
   [VeloGenius-Uploader.exe](https://github.com/vkchap/velogenius-uploader/releases/latest/download/VeloGenius-Uploader.exe)
   and double-click it. The first time, Windows shows *"Windows protected your
   PC"* because the file is new to it: click **More info**, then **Run anyway**.
-  Nothing else to install.
-- **Mac:** copy the one-line command shown in Settings and paste it into
-  Terminal (Applications › Utilities). It fetches this script into your home
-  folder and starts it. Next time, run `python3 ~/velogenius_uploader.py`.
 
 **3. Answer two questions.** It finds your Zwift folder and shows you how many
 rides are in it; you confirm, then paste your setup code. That's the whole
@@ -42,7 +43,7 @@ Tymewear or Garmin exports, for instance. This is a one-off and does not
 change your Zwift folder setting:
 
     VeloGenius-Uploader.exe --folder C:\Users\you\Downloads\tymewear
-    python3 ~/velogenius_uploader.py --folder ~/Downloads/tymewear
+    "/Applications/VeloGenius Uploader.app/Contents/Resources/velogenius-uploader/velogenius-uploader" --folder ~/Downloads/tymewear
 
 ## If macOS blocks reading your Documents folder
 
@@ -68,6 +69,8 @@ only by you. Delete that file to start over.
 
 ## Building
 
-The Windows executable is built by GitHub Actions from `velogenius_uploader.py`
-on every push to `main` and published as the rolling `latest` release. It
-bundles its own Python, so nothing needs installing.
+Both installers are built by GitHub Actions from `velogenius_uploader.py` on
+every push to `main` and published as the rolling `latest` release. Each
+bundles its own Python, so nothing needs installing. The Mac app is signed
+with a Developer ID certificate and notarized by Apple in the same run; the
+credentials live as repository secrets.
