@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pyinstaller
+      - run: pip install pyinstaller dmgbuild pillow
 
       - name: Import the Developer ID certificate into a throwaway keychain
         env:
@@ -77,6 +77,18 @@ jobs:
           cp mac/launcher.sh "$APP/Contents/MacOS/launcher"
           chmod +x "$APP/Contents/MacOS/launcher"
           sed "s/__VERSION__/${{ github.run_number }}/g" mac/Info.plist > "$APP/Contents/Info.plist"
+
+          # The app icon, from the site's own mark. The source is 256px, which
+          # is exactly icon_128x128@2x — the largest size Finder asks for at
+          # the sizes we ship — so nothing is upscaled.
+          ICONSET="$RUNNER_TEMP/AppIcon.iconset"
+          rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+          for pair in "16 icon_16x16" "32 icon_16x16@2x" "32 icon_32x32" "64 icon_32x32@2x" \
+                      "128 icon_128x128" "256 icon_128x128@2x" "256 icon_256x256"; do
+            set -- $pair
+            sips -z "$1" "$1" mac/icon.png --out "$ICONSET/$2.png" >/dev/null
+          done
+          iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
       - name: Sign the bundle
         run: |
@@ -116,15 +128,15 @@ jobs:
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/app.zip"
           notarize "$RUNNER_TEMP/app.zip"
           xcrun stapler staple "$APP"
-          # A staging folder with an Applications shortcut beside the app, so
-          # the disk image says "drag me over there". Running an app from the
-          # read-only image instead leaves macOS unable to clear its quarantine
-          # flag, which is what makes the inner program look untrusted.
-          STAGE="$RUNNER_TEMP/dmg"
-          rm -rf "$STAGE"; mkdir -p "$STAGE"
-          ditto "$APP" "$STAGE/VeloGenius Uploader.app"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "VeloGenius Uploader" -srcfolder "$STAGE" -ov -format UDZO dist/VeloGenius-Uploader.dmg
+          # A laid-out disk image: the app, an Applications shortcut, and a
+          # background drawing an arrow from one to the other. Dragging it
+          # across matters — run from the read-only image, macOS cannot clear
+          # the app's quarantine flag, and the program inside looks untrusted.
+          python3 mac/make-background.py "$RUNNER_TEMP/background"
+          tiffutil -cathidpicheck "$RUNNER_TEMP/background.png" "$RUNNER_TEMP/background@2x.png" \
+            -out "$RUNNER_TEMP/background.tiff"
+          APP_PATH="$APP" DMG_BACKGROUND="$RUNNER_TEMP/background.tiff" \
+            dmgbuild -s mac/dmg-settings.py "VeloGenius Uploader" dist/VeloGenius-Uploader.dmg
           codesign --force --timestamp --sign "$ID" dist/VeloGenius-Uploader.dmg
           notarize dist/VeloGenius-Uploader.dmg
           xcrun stapler staple dist/VeloGenius-Uploader.dmg
