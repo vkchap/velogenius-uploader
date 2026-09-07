@@ -71,7 +71,9 @@ jobs:
         run: |
           APP="dist/VeloGenius Uploader.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp -R dist/velogenius-uploader "$APP/Contents/Resources/velogenius-uploader"
+          # ditto, not cp: the Python framework inside is a signed bundle whose
+          # seal covers its symlink layout, and cp -R rewrites symlinks.
+          ditto dist/velogenius-uploader "$APP/Contents/Resources/velogenius-uploader"
           cp mac/launcher.sh "$APP/Contents/MacOS/launcher"
           chmod +x "$APP/Contents/MacOS/launcher"
           sed "s/__VERSION__/${{ github.run_number }}/g" mac/Info.plist > "$APP/Contents/Info.plist"
@@ -80,6 +82,14 @@ jobs:
         run: |
           APP="dist/VeloGenius Uploader.app"
           ID="Developer ID Application: Van Chappell (386NH3KWBK)"
+          # Re-sign the framework from the inside out after it was moved:
+          # its binary, then the framework bundle, then the app around it.
+          FW="$APP/Contents/Resources/velogenius-uploader/_internal/Python.framework"
+          if [ -d "$FW" ]; then
+            codesign --force --options runtime --timestamp --sign "$ID" "$FW/Versions/3.12/Python"
+            codesign --force --options runtime --timestamp --sign "$ID" "$FW/Versions/3.12"
+            codesign --verify --strict --verbose=2 "$FW/Versions/3.12"
+          fi
           codesign --force --options runtime --timestamp \
             --entitlements mac/entitlements.plist --sign "$ID" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
