@@ -70,8 +70,8 @@ jobs:
       - name: Assemble the app bundle
         run: |
           APP="dist/VeloGenius Uploader.app"
-          mkdir -p "$APP/Contents/MacOS"
-          cp -R dist/velogenius-uploader "$APP/Contents/MacOS/velogenius-uploader"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp -R dist/velogenius-uploader "$APP/Contents/Resources/velogenius-uploader"
           cp mac/launcher.sh "$APP/Contents/MacOS/launcher"
           chmod +x "$APP/Contents/MacOS/launcher"
           sed "s/__VERSION__/${{ github.run_number }}/g" mac/Info.plist > "$APP/Contents/Info.plist"
