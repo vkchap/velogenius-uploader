@@ -6,7 +6,7 @@ name: Build uploader
 on:
   push:
     branches: [main]
-    paths: [velogenius_uploader.py, .github/workflows/build.yml]
+    paths: [velogenius_uploader.py, mac/**, .github/workflows/build.yml]
   workflow_dispatch:
 
 permissions:
@@ -33,3 +33,79 @@ jobs:
             --title "VeloGenius Uploader" \
             --notes "Current build of the uploader. Windows: download the .exe and double-click it. The first time, Windows shows 'Windows protected your PC': click More info, then Run anyway."
           gh release upload latest dist/VeloGenius-Uploader.exe --clobber
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller
+
+      - name: Import the Developer ID certificate into a throwaway keychain
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYPASS="$(openssl rand -hex 16)"
+          security create-keychain -p "$KEYPASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYPASS" "$KEYCHAIN"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYPASS" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Build, signing every binary as it is collected
+        run: |
+          pyinstaller --onedir --console --name velogenius-uploader \
+            --codesign-identity "Developer ID Application: Van Chappell (386NH3KWBK)" \
+            --osx-entitlements-file mac/entitlements.plist \
+            velogenius_uploader.py
+
+      - name: Assemble the app bundle
+        run: |
+          APP="dist/VeloGenius Uploader.app"
+          mkdir -p "$APP/Contents/MacOS"
+          cp -R dist/velogenius-uploader "$APP/Contents/MacOS/velogenius-uploader"
+          cp mac/launcher.sh "$APP/Contents/MacOS/launcher"
+          chmod +x "$APP/Contents/MacOS/launcher"
+          sed "s/__VERSION__/${{ github.run_number }}/g" mac/Info.plist > "$APP/Contents/Info.plist"
+
+      - name: Sign the bundle
+        run: |
+          APP="dist/VeloGenius Uploader.app"
+          ID="Developer ID Application: Van Chappell (386NH3KWBK)"
+          codesign --force --options runtime --timestamp \
+            --entitlements mac/entitlements.plist --sign "$ID" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Notarize, staple, and wrap in a disk image
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          APP="dist/VeloGenius Uploader.app"
+          ID="Developer ID Application: Van Chappell (386NH3KWBK)"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/app.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/app.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$APP"
+          hdiutil create -volname "VeloGenius Uploader" -srcfolder "$APP" -ov -format UDZO dist/VeloGenius-Uploader.dmg
+          codesign --force --timestamp --sign "$ID" dist/VeloGenius-Uploader.dmg
+          xcrun notarytool submit dist/VeloGenius-Uploader.dmg \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/VeloGenius-Uploader.dmg
+          spctl --assess --type open --context context:primary-signature -v dist/VeloGenius-Uploader.dmg
+
+      - name: Publish next to the Windows build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "VeloGenius Uploader" --notes "Current build of the uploader."
+          gh release upload latest dist/VeloGenius-Uploader.dmg --clobber
